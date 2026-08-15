@@ -99,31 +99,27 @@ else
     fi
 fi
 
-echo ""
-echo " nourfetch installed successfully! "
+echo "nourfetch installed successfully."
 
 # Check if INSTALL_DIR is in PATH
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)
     echo ""
-    echo "⚠️  Important: '$INSTALL_DIR' is not in your current PATH."
+    echo "Note: '$INSTALL_DIR' is not in your current PATH."
     
-    # Auto-add to shell configs
     for RC in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
       if [ -f "$RC" ] && [ -w "$RC" ]; then
         if ! grep -q "$INSTALL_DIR" "$RC" 2>/dev/null; then
           echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$RC"
-          echo "  -> Added to $RC"
         fi
       fi
     done
 
-    echo ""
-    echo " To use 'nourfetch' in this current terminal window, run:"
-    echo "     export PATH=\"$INSTALL_DIR:\$PATH\""
-    echo "   or:"
-    echo "     source ~/.bashrc"
+    echo "To use 'nourfetch' in this terminal, run:"
+    echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+    echo "or:"
+    echo "  source ~/.bashrc"
     echo ""
     ;;
 esac
@@ -134,4 +130,5 @@ echo ""
 if [ -x "$TARGET" ]; then
     "$TARGET"
 fi
+
 
