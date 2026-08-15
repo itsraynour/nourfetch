@@ -4,6 +4,10 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-release:
@@ -40,11 +44,17 @@ jobs:
       - name: Build Release Binary
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Prepare Binary
+        shell: bash
+        run: |
+          mkdir -p ./dist
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ./dist/${{ matrix.asset_name }}
+
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+          path: ./dist/${{ matrix.asset_name }}
 
   create-release:
     name: Create GitHub Release
@@ -56,10 +66,11 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: ./artifacts
+          path: ./dist
+          merge-multiple: true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./artifacts/**/*
+          files: ./dist/*
           generate_release_notes: true
