@@ -100,7 +100,7 @@ else
 fi
 
 echo ""
-echo "✨ nourfetch installed successfully!"
+echo " nourfetch installed successfully! "
 
 # Check if INSTALL_DIR is in PATH
 case ":$PATH:" in
@@ -120,7 +120,7 @@ case ":$PATH:" in
     done
 
     echo ""
-    echo "👉 To use 'nourfetch' in this current terminal window, run:"
+    echo " To use 'nourfetch' in this current terminal window, run:"
     echo "     export PATH=\"$INSTALL_DIR:\$PATH\""
     echo "   or:"
     echo "     source ~/.bashrc"
