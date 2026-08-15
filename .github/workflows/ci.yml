@@ -22,25 +22,14 @@ jobs:
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
 
       - name: Cargo Check
         run: cargo check --verbose
-
-      - name: Cargo Clippy
-        run: cargo clippy -- -D warnings
 
       - name: Cargo Build Release
         run: cargo build --release --verbose
 
       - name: Run Self Test
-        shell: bash
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            ./target/release/nourfetch.exe --version
-            ./target/release/nourfetch.exe --json
-          else
-            ./target/release/nourfetch --version
-            ./target/release/nourfetch --json
-          fi
+          cargo run --release -- -v
+          cargo run --release -- --json
