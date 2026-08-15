@@ -28,37 +28,64 @@ case "$OS" in
     ;;
 esac
 
+# Determine install location
 INSTALL_DIR="/usr/local/bin"
-if [ ! -w "$INSTALL_DIR" ]; then
+USE_SUDO=0
+
+if [ -w "$INSTALL_DIR" ]; then
+    USE_SUDO=0
+elif command -v sudo >/dev/null 2>&1 && (sudo -n true 2>/dev/null || [ -t 0 ] || [ -c /dev/tty ]); then
+    # Try using sudo if user has permissions or interactive terminal
+    if sudo -v 2>/dev/null; then
+        USE_SUDO=1
+    else
+        INSTALL_DIR="$HOME/.local/bin"
+        USE_SUDO=0
+        mkdir -p "$INSTALL_DIR"
+    fi
+else
     INSTALL_DIR="$HOME/.local/bin"
+    USE_SUDO=0
     mkdir -p "$INSTALL_DIR"
 fi
 
 TARGET="$INSTALL_DIR/nourfetch"
+TMP_BIN="/tmp/nourfetch_$$"
+
+cleanup() {
+    rm -f "$TMP_BIN"
+}
+trap cleanup EXIT INT TERM
 
 DOWNLOAD_SUCCESS=0
 
 if [ -f "./target/release/nourfetch" ]; then
-    cp "./target/release/nourfetch" "$TARGET"
-    chmod +x "$TARGET"
+    cp "./target/release/nourfetch" "$TMP_BIN"
+    chmod +x "$TMP_BIN"
     DOWNLOAD_SUCCESS=1
-    echo "Installed local build to $TARGET"
 elif [ -n "$ASSET" ]; then
     URL="https://github.com/$REPO/releases/latest/download/$ASSET"
     echo "Downloading nourfetch from $URL..."
     if command -v curl >/dev/null 2>&1; then
-        if curl -fsSL "$URL" -o "$TARGET" 2>/dev/null; then
+        if curl -fsSL "$URL" -o "$TMP_BIN" 2>/dev/null; then
             DOWNLOAD_SUCCESS=1
         fi
     elif command -v wget >/dev/null 2>&1; then
-        if wget -qO "$TARGET" "$URL" 2>/dev/null; then
+        if wget -qO "$TMP_BIN" "$URL" 2>/dev/null; then
             DOWNLOAD_SUCCESS=1
         fi
     fi
 fi
 
 if [ "$DOWNLOAD_SUCCESS" -eq 1 ]; then
-    chmod +x "$TARGET"
+    chmod +x "$TMP_BIN"
+    if [ "$USE_SUDO" -eq 1 ]; then
+        sudo cp "$TMP_BIN" "$TARGET"
+        sudo chmod +x "$TARGET"
+    else
+        cp "$TMP_BIN" "$TARGET"
+        chmod +x "$TARGET"
+    fi
     echo "Installed nourfetch to $TARGET"
 else
     echo "Binary asset not found in release. Building from source via Cargo..."
@@ -72,50 +99,37 @@ else
     fi
 fi
 
-echo "nourfetch installed successfully."
+echo ""
+echo "✨ nourfetch installed successfully!"
 
 # Check if INSTALL_DIR is in PATH
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)
     echo ""
-    echo "⚠️  Note: '$INSTALL_DIR' is not in your current PATH."
+    echo "⚠️  Important: '$INSTALL_DIR' is not in your current PATH."
     
-    # Try to automatically add to shell config
-    ADDED_TO_RC=0
-    if [ -n "$SHELL" ]; then
-      case "$SHELL" in
-        */zsh)
-          SHELL_RC="$HOME/.zshrc"
-          ;;
-        */bash)
-          SHELL_RC="$HOME/.bashrc"
-          ;;
-        *)
-          SHELL_RC="$HOME/.profile"
-          ;;
-      esac
-    else
-      SHELL_RC="$HOME/.profile"
-    fi
-
-    if [ -f "$SHELL_RC" ] || [ -w "$HOME" ]; then
-      if ! grep -q "$INSTALL_DIR" "$SHELL_RC" 2>/dev/null; then
-        echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$SHELL_RC"
-        echo "Added $INSTALL_DIR to $SHELL_RC."
-        echo "Please run: source $SHELL_RC (or restart your terminal) to use 'nourfetch'."
-        ADDED_TO_RC=1
+    # Auto-add to shell configs
+    for RC in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+      if [ -f "$RC" ] && [ -w "$RC" ]; then
+        if ! grep -q "$INSTALL_DIR" "$RC" 2>/dev/null; then
+          echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$RC"
+          echo "  -> Added to $RC"
+        fi
       fi
-    fi
+    done
 
-    if [ "$ADDED_TO_RC" -eq 0 ]; then
-      echo "To fix this, add the following line to your ~/.bashrc or ~/.zshrc:"
-      echo "    export PATH=\"$INSTALL_DIR:\$PATH\""
-    fi
+    echo ""
+    echo "👉 To use 'nourfetch' in this current terminal window, run:"
+    echo "     export PATH=\"$INSTALL_DIR:\$PATH\""
+    echo "   or:"
+    echo "     source ~/.bashrc"
+    echo ""
     ;;
 esac
 
 echo "Run 'nourfetch' in your terminal."
+echo ""
 
 if [ -x "$TARGET" ]; then
     "$TARGET"
