@@ -335,6 +335,29 @@ fn count_linux_packages() -> (usize, String) {
         }
     }
 
+    let nix_system = Path::new("/run/current-system/sw/bin");
+    let nix_user = std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".nix-profile/bin"));
+    let mut nix_count = 0;
+
+    if nix_system.exists() {
+        if let Ok(entries) = fs::read_dir(nix_system) {
+            nix_count += entries.filter_map(Result::ok).count();
+        }
+    }
+
+    if let Some(user_path) = nix_user {
+        if user_path.exists() && user_path != nix_system {
+            if let Ok(entries) = fs::read_dir(user_path) {
+                nix_count += entries.filter_map(Result::ok).count();
+            }
+        }
+    }
+
+    if nix_count > 0 {
+        count += nix_count;
+        managers.push(format!("nix ({})", nix_count));
+    }
+
     let flatpak_dir = Path::new("/var/lib/flatpak/app");
     if flatpak_dir.exists() {
         if let Ok(entries) = fs::read_dir(flatpak_dir) {
