@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nourfetch — Zero-Dependency System Information in Pure Rust</title>
+  <meta name="description" content="A fast, aesthetic, zero-dependency system information tool for Windows, Linux, and macOS written in 100% pure Rust. Sub-5ms execution, ~265 KB binary.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230f172a'/><path d='M8 11l5 5-5 5M16 21h8' stroke='%23f59e0b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/></svg>">
+  
+  <!-- Fonts: Geist / Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Geist', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* High-Legibility, Eye-Friendly Color System (Linear & GitHub Dark inspired) */
+    :root {
+      --bg-canvas: #f8fafc;
+      --bg-surface: #ffffff;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+      --accent-color: #d97706;
+      --terminal-bg: #0f172a;
+      --terminal-border: #1e293b;
+      --terminal-text: #f8fafc;
+    }
+
+    .dark {
+      --bg-canvas: #0e1117;
+      --bg-surface: #161b22;
+      --border-color: #2b313c;
+      --text-main: #f0f6fc;
+      --text-muted: #a3b1c2;
+      --text-dim: #768390;
+      --accent-color: #f59e0b;
+      --terminal-bg: #11151c;
+      --terminal-border: #262c36;
+      --terminal-text: #f0f6fc;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-muted);
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .bg-custom-canvas { background-color: var(--bg-canvas); }
+    .bg-custom-surface { background-color: var(--bg-surface); }
+    .border-custom { border-color: var(--border-color); }
+    .text-custom-main { color: var(--text-main); }
+    .text-custom-muted { color: var(--text-muted); }
+    .text-custom-dim { color: var(--text-dim); }
+    .text-custom-accent { color: var(--accent-color); }
+
+    .bg-terminal { background-color: var(--terminal-bg); }
+    .border-terminal { border-color: var(--terminal-border); }
+
+    /* Minimalist scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-canvas);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 3px;
+    }
+
+    ::selection {
+      background: rgba(245, 158, 11, 0.25);
+      color: var(--text-main);
+    }
+
+    .terminal-view {
+      font-feature-settings: "liga" 0;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body class="font-sans antialiased min-h-screen">
+
+  <!-- HEADER -->
+  <header class="border-b border-custom sticky top-0 z-50 bg-custom-canvas/90 backdrop-blur-md">
+    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <a href="#" class="flex items-center gap-2.5 group">
+        <span class="font-mono font-bold text-custom-main tracking-tight text-sm">nourfetch</span>
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-custom-surface border border-custom text-custom-dim font-medium">1.0.2</span>
+      </a>
+
+      <!-- Desktop Navigation Links -->
+      <nav class="hidden md:flex items-center gap-6 text-xs font-mono font-medium text-custom-muted">
+        <a href="#overview" class="hover:text-custom-main transition-colors">Overview</a>
+        <a href="#demo" class="hover:text-custom-main transition-colors">Interactive</a>
+        <a href="#architecture" class="hover:text-custom-main transition-colors">Architecture</a>
+        <a href="#benchmarks" class="hover:text-custom-main transition-colors">Benchmarks</a>
+        <a href="#install" class="hover:text-custom-main transition-colors">Install</a>
+        <a href="#docs" class="hover:text-custom-main transition-colors">Docs</a>
+      </nav>
+
+      <!-- Right Header Actions (Theme Toggle, GitHub, Mobile Menu Button) -->
+      <div class="flex items-center gap-3">
+        
+        <!-- Theme Toggle Button (Light/Dark Mode) -->
+        <button onclick="toggleTheme()" id="theme-toggle-btn" title="Toggle dark/light mode" 
+                class="p-1.5 rounded text-custom-muted hover:text-custom-main hover:bg-custom-surface border border-transparent hover:border-custom transition-all">
+          <i data-lucide="sun" class="w-4 h-4 hidden dark:block text-amber-400" id="sun-icon"></i>
+          <i data-lucide="moon" class="w-4 h-4 block dark:hidden text-slate-700" id="moon-icon"></i>
+        </button>
+
+        <!-- GitHub Link -->
+        <a href="https://github.com/itsraynour/nourfetch" target="_blank" rel="noopener noreferrer" 
+           class="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono font-medium text-custom-muted hover:text-custom-main transition-colors">
+          <i data-lucide="github" class="w-3.5 h-3.5"></i>
+          <span>GitHub</span>
+        </a>
+
+        <!-- Mobile Menu Toggle Button -->
+        <button onclick="toggleMobileMenu()" id="mobile-menu-btn" 
+                class="md:hidden p-1.5 text-custom-muted hover:text-custom-main rounded focus:outline-none" aria-label="Toggle Navigation">
+          <i data-lucide="menu" class="w-5 h-5" id="mobile-menu-icon"></i>
+        </button>
+
+      </div>
+
+    </div>
+
+    <!-- Mobile Navigation Drawer -->
+    <div id="mobile-menu" class="hidden md:hidden border-t border-custom bg-custom-canvas px-6 py-4 space-y-3 font-mono text-xs text-custom-muted">
+      <a href="#overview" onclick="closeMobileMenu()" class="block py-1.5 hover:text-custom-main transition-colors">Overview</a>
+      <a href="#demo" onclick="closeMobileMenu()" class="block py-1.5 hover:text-custom-main transition-colors">Interactive Demo</a>
+      <a href="#architecture" onclick="closeMobileMenu()" class="block py-1.5 hover:text-custom-main transition-colors">Architecture</a>
+      <a href="#benchmarks" onclick="closeMobileMenu()" class="block py-1.5 hover:text-custom-main transition-colors">Benchmarks</a>
+      <a href="#install" onclick="closeMobileMenu()" class="block py-1.5 hover:text-custom-main transition-colors">Install</a>
+      <a href="#docs" onclick="closeMobileMenu()" class="block py-1.5 hover:text-custom-main transition-colors">Docs</a>
+      <div class="pt-2 border-t border-custom flex items-center justify-between">
+        <a href="https://github.com/itsraynour/nourfetch" target="_blank" class="flex items-center gap-1.5 hover:text-custom-main transition-colors">
+          <i data-lucide="github" class="w-3.5 h-3.5"></i>
+          <span>GitHub Repository</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6">
+
+    <!-- HERO SECTION -->
+    <section id="overview" class="pt-16 sm:pt-20 pb-12 sm:pb-16">
+      
+      <!-- Minimal Tagline -->
+      <div class="text-xs font-mono text-custom-accent mb-3 sm:mb-4 tracking-wider uppercase font-semibold">Pure Rust • Zero Dependencies</div>
+      
+      <h1 class="text-3xl sm:text-5xl font-bold tracking-tight text-custom-main mb-4 sm:mb-5 leading-tight">
+        Instant system information.<br>
+        Zero external dependencies.
+      </h1>
+
+      <p class="max-w-2xl text-sm sm:text-base text-custom-muted leading-relaxed mb-8">
+        A fast, aesthetic CLI system fetch utility built exclusively with the Rust standard library and raw operating system interfaces. Sub-5ms startup, 265 KB standalone binary, and TrueColor linear gradients.
+      </p>
+
+      <!-- Quick Install Box -->
+      <div class="max-w-xl font-mono text-xs mb-8">
+        
+        <!-- Platform Switcher Tabs -->
+        <div class="flex items-center gap-3 mb-2 text-custom-dim" id="install-tabs">
+          <button onclick="setInstallCmd('powershell')" id="tab-ps" class="text-custom-main font-semibold border-b-2 border-custom-accent pb-0.5">Windows</button>
+          <button onclick="setInstallCmd('bash')" id="tab-bash" class="hover:text-custom-main transition-colors pb-0.5">Linux / macOS</button>
+          <button onclick="setInstallCmd('cargo')" id="tab-cargo" class="hover:text-custom-main transition-colors pb-0.5">Cargo</button>
+        </div>
+
+        <!-- Command Line Strip -->
+        <div class="flex items-center justify-between p-3.5 bg-custom-surface border border-custom rounded-md text-left shadow-sm">
+          <div class="overflow-x-auto scrollbar-none pr-3">
+            <span class="text-custom-dim mr-2 select-none font-bold">$</span>
+            <code id="install-cmd" class="text-custom-main font-medium select-all whitespace-nowrap">irm https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.ps1 | iex</code>
+          </div>
+          <button onclick="copyInstallCmd()" id="copy-btn" class="flex-shrink-0 text-custom-muted hover:text-custom-main transition-colors flex items-center gap-1">
+            <i data-lucide="copy" class="w-3.5 h-3.5" id="copy-icon"></i>
+            <span id="copy-label" class="font-medium">Copy</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Key Minimal Specs Row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-6 border-t border-custom font-mono text-xs">
+        <div>
+          <div class="text-custom-main font-bold text-sm sm:text-base">&lt; 5 ms</div>
+          <div class="text-custom-dim mt-0.5">Startup time</div>
+        </div>
+        <div>
+          <div class="text-custom-main font-bold text-sm sm:text-base">0 Crates</div>
+          <div class="text-custom-dim mt-0.5">External dependencies</div>
+        </div>
+        <div>
+          <div class="text-custom-main font-bold text-sm sm:text-base">~265 KB</div>
+          <div class="text-custom-dim mt-0.5">Release binary size</div>
+        </div>
+        <div>
+          <div class="text-custom-main font-bold text-sm sm:text-base">24-bit RGB</div>
+          <div class="text-custom-dim mt-0.5">Linear gradients</div>
+        </div>
+      </div>
+
+    </section>
+
+    <hr class="border-custom my-6 sm:my-8">
+
+    <!-- INTERACTIVE TERMINAL SHOWCASE -->
+    <section id="demo" class="py-8 sm:py-12">
+      
+      <div class="mb-6">
+        <h2 class="text-xl font-bold text-custom-main tracking-tight">Interactive Terminal</h2>
+        <p class="text-xs text-custom-muted mt-1">Preview layouts, color themes, ASCII logos, and progress bar styles in real-time.</p>
+      </div>
+
+      <!-- Controls Row -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-4 font-mono text-xs">
+        
+        <div>
+          <label class="block text-custom-dim mb-1 font-medium">Layout</label>
+          <select id="sim-layout" onchange="updateSim()" class="w-full bg-custom-surface border border-custom rounded px-2.5 py-1.5 text-custom-main font-medium focus:outline-none">
+            <option value="classic">Classic (Side-by-Side)</option>
+            <option value="modern">Modern Card (--modern)</option>
+            <option value="compact">Compact (--compact)</option>
+            <option value="json">JSON (--json)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-custom-dim mb-1 font-medium">Theme</label>
+          <select id="sim-theme" onchange="updateSim()" class="w-full bg-custom-surface border border-custom rounded px-2.5 py-1.5 text-custom-main font-medium focus:outline-none">
+            <option value="nour">nour (default)</option>
+            <option value="cyberpunk">cyberpunk</option>
+            <option value="catppuccin">catppuccin</option>
+            <option value="dracula">dracula</option>
+            <option value="nord">nord</option>
+            <option value="sunset">sunset</option>
+            <option value="matrix">matrix</option>
+            <option value="tokyonight">tokyonight</option>
+            <option value="gruvbox">gruvbox</option>
+            <option value="minimal">minimal</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-custom-dim mb-1 font-medium">ASCII Logo (30+)</label>
+          <select id="sim-logo" onchange="updateSim()" class="w-full bg-custom-surface border border-custom rounded px-2.5 py-1.5 text-custom-main font-medium focus:outline-none">
+            <option value="windows11">Windows 11</option>
+            <option value="windows10">Windows 10</option>
+            <option value="gnu">GNU (Iconic Head)</option>
+            <option value="gnu_small">GNU Small</option>
+            <option value="guix">GNU Guix</option>
+            <option value="arch">Arch Linux</option>
+            <option value="ubuntu">Ubuntu</option>
+            <option value="fedora">Fedora</option>
+            <option value="debian">Debian</option>
+            <option value="nixos">NixOS</option>
+            <option value="alpine">Alpine Linux</option>
+            <option value="pop_os">Pop!_OS</option>
+            <option value="manjaro">Manjaro</option>
+            <option value="gentoo">Gentoo Linux</option>
+            <option value="kali">Kali Linux</option>
+            <option value="void">Void Linux</option>
+            <option value="opensuse">openSUSE</option>
+            <option value="artix">Artix Linux</option>
+            <option value="endeavouros">EndeavourOS</option>
+            <option value="linuxmint">Linux Mint</option>
+            <option value="zorin">Zorin OS</option>
+            <option value="elementary">elementary OS</option>
+            <option value="slackware">Slackware</option>
+            <option value="freebsd">FreeBSD</option>
+            <option value="redhat">Red Hat</option>
+            <option value="rocky">Rocky Linux</option>
+            <option value="garuda">Garuda Linux</option>
+            <option value="parrot">Parrot OS</option>
+            <option value="tux">Linux Tux</option>
+            <option value="macos">macOS</option>
+            <option value="nour">Nourfetch Cyber</option>
+            <option value="badge">Nourfetch Badge</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-custom-dim mb-1 font-medium">Bar Style / Icons</label>
+          <div class="flex gap-2">
+            <select id="sim-bar" onchange="updateSim()" class="w-2/3 bg-custom-surface border border-custom rounded px-2 py-1.5 text-custom-main font-medium focus:outline-none">
+              <option value="smooth">Smooth (█░)</option>
+              <option value="block">Block (■□)</option>
+              <option value="circle">Circle (●○)</option>
+              <option value="rounded">Rounded (━─)</option>
+              <option value="ascii">ASCII (#-)</option>
+            </select>
+            <button onclick="toggleIcons()" id="icon-toggle" class="w-1/3 bg-custom-surface border border-custom rounded text-custom-main hover:border-custom-accent transition-colors text-[11px] font-medium">
+              Icons
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Terminal Output Screen (High Contrast, Deep Rich Background) -->
+      <div class="bg-terminal border border-terminal rounded-md overflow-hidden font-mono text-xs shadow-xl">
+        
+        <!-- Header -->
+        <div class="px-4 py-2.5 border-b border-terminal flex items-center justify-between text-slate-400">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
+            <span class="text-slate-300 ml-2 text-[11px] font-medium" id="sim-cmd-title">nourfetch</span>
+          </div>
+          <button onclick="copyOutput()" title="Copy output" class="text-slate-400 hover:text-slate-200 transition-colors flex items-center gap-1 text-[11px]">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span id="output-copy-label">Copy</span>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-6 overflow-x-auto terminal-view text-slate-100 selection:bg-amber-500/30" id="terminal-canvas">
+          <!-- Populated by JS -->
+        </div>
+
+      </div>
+
+    </section>
+
+    <hr class="border-custom my-6 sm:my-8">
+
+    <!-- ARCHITECTURE & PHILOSOPHY -->
+    <section id="architecture" class="py-8 sm:py-12">
+      
+      <div class="mb-8">
+        <h2 class="text-xl font-bold text-custom-main tracking-tight">Engineering & Architecture</h2>
+        <p class="text-xs text-custom-muted mt-1">Design decisions powering sub-millisecond execution and memory safety.</p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 font-sans">
+        
+        <div class="space-y-2">
+          <div class="font-mono text-xs text-custom-main font-bold">01. Zero Third-Party Crates</div>
+          <p class="text-xs sm:text-sm text-custom-muted leading-relaxed">
+            Eliminates supply chain vulnerabilities, binary bloat, and compile delays. Built entirely from standard library primitives and direct OS system calls.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <div class="font-mono text-xs text-custom-main font-bold">02. Sub-5ms Startup</div>
+          <p class="text-xs sm:text-sm text-custom-muted leading-relaxed">
+            No shell interpretation, no slow WMI/VBScript queries on Windows, and zero runtime interpreters. Pure compiled machine code.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <div class="font-mono text-xs text-custom-main font-bold">03. Native OS Syscalls & FFI</div>
+          <p class="text-xs sm:text-sm text-custom-muted leading-relaxed">
+            Direct Win32 FFI and Registry reading on Windows; raw <code class="font-mono text-custom-main bg-custom-surface px-1 py-0.5 rounded border border-custom">/proc</code> and <code class="font-mono text-custom-main bg-custom-surface px-1 py-0.5 rounded border border-custom">/sys</code> parsing on Linux; kernel <code class="font-mono text-custom-main bg-custom-surface px-1 py-0.5 rounded border border-custom">sysctl</code> queries on macOS.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <div class="font-mono text-xs text-custom-main font-bold">04. 24-bit TrueColor Output</div>
+          <p class="text-xs sm:text-sm text-custom-muted leading-relaxed">
+            Native RGB linear interpolation gradients, 10 built-in color themes, 5 progress bar character styles, and modern boxed card layout mode.
+          </p>
+        </div>
+
+      </div>
+
+    </section>
+
+    <hr class="border-custom my-6 sm:my-8">
+
+    <!-- BENCHMARKS & COMPARISON -->
+    <section id="benchmarks" class="py-8 sm:py-12">
+      
+      <div class="mb-6">
+        <h2 class="text-xl font-bold text-custom-main tracking-tight">Benchmark & Feature Matrix</h2>
+        <p class="text-xs text-custom-muted mt-1">Comparison against traditional and contemporary system fetch utilities.</p>
+      </div>
+
+      <div class="overflow-x-auto border border-custom rounded-md bg-custom-surface font-mono text-xs shadow-sm">
+        <table class="w-full text-left divide-y divide-border-custom">
+          <thead>
+            <tr class="text-custom-dim">
+              <th class="p-3.5 font-bold">Metric</th>
+              <th class="p-3.5 font-medium">neofetch (Bash)</th>
+              <th class="p-3.5 font-medium">fastfetch (C)</th>
+              <th class="p-3.5 font-bold text-custom-main bg-custom-canvas/40">nourfetch (Pure Rust)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border-custom text-custom-muted">
+            <tr>
+              <td class="p-3.5 text-custom-main font-medium">Language</td>
+              <td class="p-3.5">Bash</td>
+              <td class="p-3.5">C</td>
+              <td class="p-3.5 text-custom-main font-bold bg-custom-canvas/40">Pure Rust</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 text-custom-main font-medium">Dependencies</td>
+              <td class="p-3.5">Multiple POSIX tools</td>
+              <td class="p-3.5">Dynamic C libraries</td>
+              <td class="p-3.5 text-custom-accent font-bold bg-custom-canvas/40">0 (Zero Crates)</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 text-custom-main font-medium">Startup Time</td>
+              <td class="p-3.5">~150 - 500 ms</td>
+              <td class="p-3.5">~10 - 20 ms</td>
+              <td class="p-3.5 text-custom-accent font-bold bg-custom-canvas/40">&lt; 5 ms</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 text-custom-main font-medium">Binary Size</td>
+              <td class="p-3.5">Script</td>
+              <td class="p-3.5">~2 - 4 MB</td>
+              <td class="p-3.5 text-custom-accent font-bold bg-custom-canvas/40">~265 KB</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 text-custom-main font-medium">Windows Support</td>
+              <td class="p-3.5">MSYS / WSL / Slow</td>
+              <td class="p-3.5">Win32 API</td>
+              <td class="p-3.5 text-custom-main font-medium bg-custom-canvas/40">Native Win32 FFI & Registry</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 text-custom-main font-medium">Card UI Mode</td>
+              <td class="p-3.5">No</td>
+              <td class="p-3.5">No</td>
+              <td class="p-3.5 text-custom-main font-medium bg-custom-canvas/40">Yes (--modern)</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 text-custom-main font-medium">JSON Output</td>
+              <td class="p-3.5">No</td>
+              <td class="p-3.5">Yes</td>
+              <td class="p-3.5 text-custom-main font-medium bg-custom-canvas/40">Yes (--json)</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+
+    <hr class="border-custom my-6 sm:my-8">
+
+    <!-- INSTALLATION -->
+    <section id="install" class="py-8 sm:py-12">
+      
+      <div class="mb-6">
+        <h2 class="text-xl font-bold text-custom-main tracking-tight">Installation</h2>
+        <p class="text-xs text-custom-muted mt-1">Pre-built standalone binaries and one-line setup scripts.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs mb-6">
+        
+        <!-- Windows -->
+        <div class="p-4 bg-custom-surface border border-custom rounded-md flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-custom-main font-bold mb-1 text-sm">Windows (x86_64)</div>
+            <p class="text-custom-dim text-[11px] font-sans mb-3">Auto-registers in user PATH when run.</p>
+            <div class="text-custom-muted break-all select-all mb-3 text-[11px] font-medium bg-custom-canvas/60 p-2 rounded border border-custom">
+              irm https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.ps1 | iex
+            </div>
+          </div>
+          <a href="https://github.com/itsraynour/nourfetch/releases/latest/download/nourfetch-windows-x86_64.exe" 
+             class="inline-flex items-center justify-center py-2 px-3 bg-custom-canvas border border-custom hover:border-custom-accent text-custom-main font-medium rounded transition-colors text-[11px]">
+            Download .exe (265 KB)
+          </a>
+        </div>
+
+        <!-- Linux -->
+        <div class="p-4 bg-custom-surface border border-custom rounded-md flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-custom-main font-bold mb-1 text-sm">Linux (x86_64)</div>
+            <p class="text-custom-dim text-[11px] font-sans mb-3">Installs to ~/.local/bin or /usr/local/bin.</p>
+            <div class="text-custom-muted break-all select-all mb-3 text-[11px] font-medium bg-custom-canvas/60 p-2 rounded border border-custom">
+              curl -fsSL https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.sh | sh
+            </div>
+          </div>
+          <a href="https://github.com/itsraynour/nourfetch/releases/latest/download/nourfetch-linux-x86_64" 
+             class="inline-flex items-center justify-center py-2 px-3 bg-custom-canvas border border-custom hover:border-custom-accent text-custom-main font-medium rounded transition-colors text-[11px]">
+            Download Binary
+          </a>
+        </div>
+
+        <!-- macOS -->
+        <div class="p-4 bg-custom-surface border border-custom rounded-md flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-custom-main font-bold mb-1 text-sm">macOS (Universal)</div>
+            <p class="text-custom-dim text-[11px] font-sans mb-3">Supports Apple Silicon and Intel.</p>
+            <div class="text-custom-muted break-all select-all mb-3 text-[11px] font-medium bg-custom-canvas/60 p-2 rounded border border-custom">
+              curl -fsSL https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.sh | sh
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <a href="https://github.com/itsraynour/nourfetch/releases/latest/download/nourfetch-macos-arm64" 
+               class="w-1/2 inline-flex items-center justify-center py-2 px-2 bg-custom-canvas border border-custom hover:border-custom-accent text-custom-main font-medium rounded transition-colors text-[11px]">
+              Apple Silicon
+            </a>
+            <a href="https://github.com/itsraynour/nourfetch/releases/latest/download/nourfetch-macos-x86_64" 
+               class="w-1/2 inline-flex items-center justify-center py-2 px-2 bg-custom-canvas border border-custom hover:border-custom-accent text-custom-main font-medium rounded transition-colors text-[11px]">
+              Intel
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Build from Source -->
+      <div class="p-4 bg-custom-surface border border-custom rounded-md font-mono text-xs shadow-sm">
+        <div class="text-custom-main font-bold mb-2">Build from Source (Rust 1.70+)</div>
+        <div class="text-custom-muted space-y-1 select-all font-medium">
+          <div><span class="text-custom-dim font-bold">$</span> git clone https://github.com/itsraynour/nourfetch.git</div>
+          <div><span class="text-custom-dim font-bold">$</span> cd nourfetch</div>
+          <div><span class="text-custom-dim font-bold">$</span> cargo build --release</div>
+          <div><span class="text-custom-dim font-bold">$</span> cargo install --path .</div>
+        </div>
+      </div>
+
+    </section>
+
+    <hr class="border-custom my-6 sm:my-8">
+
+    <!-- DOCUMENTATION & CONFIGURATION -->
+    <section id="docs" class="py-8 sm:py-12">
+      
+      <div class="mb-6">
+        <h2 class="text-xl font-bold text-custom-main tracking-tight">Documentation</h2>
+        <p class="text-xs text-custom-muted mt-1">CLI arguments, configuration syntax, and options reference.</p>
+      </div>
+
+      <!-- Docs Navigation Tabs -->
+      <div class="flex gap-4 border-b border-custom pb-3 mb-6 font-mono text-xs text-custom-dim overflow-x-auto" id="doc-tabs">
+        <button onclick="setDocTab('cli')" id="doc-btn-cli" class="text-custom-main font-bold border-b-2 border-custom-accent pb-1">CLI Arguments</button>
+        <button onclick="setDocTab('config')" id="doc-btn-config" class="hover:text-custom-main transition-colors pb-1">config.toml</button>
+        <button onclick="setDocTab('themes')" id="doc-btn-themes" class="hover:text-custom-main transition-colors pb-1">Themes (10)</button>
+        <button onclick="setDocTab('logos')" id="doc-btn-logos" class="hover:text-custom-main transition-colors pb-1">Logos (30+)</button>
+      </div>
+
+      <!-- TAB 1: CLI FLAGS -->
+      <div id="doc-cli" class="overflow-x-auto border border-custom rounded-md bg-custom-surface font-mono text-xs shadow-sm">
+        <table class="w-full text-left divide-y divide-border-custom">
+          <thead>
+            <tr class="text-custom-dim">
+              <th class="p-3 font-bold">Command / Flag</th>
+              <th class="p-3 font-bold">Type</th>
+              <th class="p-3 font-bold">Description</th>
+              <th class="p-3 font-bold">Example</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border-custom text-custom-muted">
+            <tr><td class="p-3 text-custom-main font-semibold">-h, --help</td><td class="p-3 text-custom-dim">One-Time</td><td class="p-3">Print help information</td><td class="p-3 text-custom-dim font-medium">nourfetch --help</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">-v, --version</td><td class="p-3 text-custom-dim">One-Time</td><td class="p-3">Print version information</td><td class="p-3 text-custom-dim font-medium">nourfetch -v</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">--install</td><td class="p-3 text-custom-dim">System</td><td class="p-3">Install binary to system PATH</td><td class="p-3 text-custom-dim font-medium">nourfetch --install</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">-t, --theme &lt;NAME&gt;</td><td class="p-3 text-custom-dim">One-Time</td><td class="p-3">Select color theme for current run</td><td class="p-3 text-custom-dim font-medium">nourfetch -t cyberpunk</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">+theme &lt;NAME&gt;, +t</td><td class="p-3 text-custom-accent font-semibold">Permanent</td><td class="p-3">Save theme permanently into config.toml</td><td class="p-3 text-custom-dim font-medium">nourfetch +theme cyberpunk</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">-l, --logo &lt;NAME&gt;</td><td class="p-3 text-custom-dim">One-Time</td><td class="p-3">Select ASCII logo for current run</td><td class="p-3 text-custom-dim font-medium">nourfetch -l gnu</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">+logo &lt;NAME&gt;, +l</td><td class="p-3 text-custom-accent font-semibold">Permanent</td><td class="p-3">Save ASCII logo permanently</td><td class="p-3 text-custom-dim font-medium">nourfetch +logo gnu</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">--layout &lt;LAYOUT&gt;</td><td class="p-3 text-custom-dim">One-Time</td><td class="p-3">Select layout style (classic, modern, compact)</td><td class="p-3 text-custom-dim font-medium">nourfetch --layout modern</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">+modern, +compact</td><td class="p-3 text-custom-accent font-semibold">Permanent</td><td class="p-3">Save layout mode permanently</td><td class="p-3 text-custom-dim font-medium">nourfetch +modern</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">-s, --save</td><td class="p-3 text-custom-accent font-semibold">Permanent</td><td class="p-3">Save all passed flags into config.toml</td><td class="p-3 text-custom-dim font-medium">nourfetch --theme nord -s</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">set &lt;KEY&gt; &lt;VAL&gt;</td><td class="p-3 text-custom-accent font-semibold">Command</td><td class="p-3">Set and save any configuration value</td><td class="p-3 text-custom-dim font-medium">nourfetch set theme dracula</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">config &lt;get|set|path|reset&gt;</td><td class="p-3 text-custom-accent font-semibold">Command</td><td class="p-3">Manage configuration file directly</td><td class="p-3 text-custom-dim font-medium">nourfetch config path</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">--json</td><td class="p-3 text-custom-dim">Output</td><td class="p-3">Output complete system & GPU specs in JSON</td><td class="p-3 text-custom-dim font-medium">nourfetch --json</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">--no-nerd-fonts</td><td class="p-3 text-custom-dim">One-Time</td><td class="p-3">Disable Nerd Font icons</td><td class="p-3 text-custom-dim font-medium">nourfetch --no-nerd-fonts</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">--list-logos, --logos</td><td class="p-3 text-custom-dim">Utility</td><td class="p-3">List all 30+ built-in ASCII logos</td><td class="p-3 text-custom-dim font-medium">nourfetch --logos</td></tr>
+            <tr><td class="p-3 text-custom-main font-semibold">--list-themes, --themes</td><td class="p-3 text-custom-dim">Utility</td><td class="p-3">List all available color themes</td><td class="p-3 text-custom-dim font-medium">nourfetch --themes</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- TAB 2: CONFIG.TOML -->
+      <div id="doc-config" class="hidden space-y-4 font-mono text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-custom-muted">
+          <div class="p-3 bg-custom-surface border border-custom rounded">
+            <span class="text-custom-dim block mb-1">Windows Path:</span>
+            <span class="text-custom-main font-semibold select-all">%APPDATA%\nourfetch\config.toml</span>
+          </div>
+          <div class="p-3 bg-custom-surface border border-custom rounded">
+            <span class="text-custom-dim block mb-1">Linux / macOS Path:</span>
+            <span class="text-custom-main font-semibold select-all">~/.config/nourfetch/config.toml</span>
+          </div>
+        </div>
+
+        <div class="p-4 bg-custom-surface border border-custom rounded-md text-custom-main font-medium overflow-x-auto leading-relaxed select-all">
+<pre><code># nourfetch configuration
+# Auto-generated and maintained by nourfetch
+
+# Theme palette to use
+theme = "nour"
+
+# ASCII logo: "auto", "gnu", "arch", "ubuntu", "fedora", "debian", etc.
+logo = "auto"
+
+# Layout style: "classic", "modern", "compact"
+layout = "classic"
+
+nerd_fonts = true
+color_blocks = true
+show_bars = true
+bar_style = "smooth"
+bar_width = 14</code></pre>
+        </div>
+      </div>
+
+      <!-- TAB 3: THEMES -->
+      <div id="doc-themes" class="hidden font-mono text-xs">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">nour</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">default indigo</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">cyberpunk</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">pink & cyan</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">catppuccin</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">mocha pastel</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">dracula</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">vampire dark</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">nord</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">arctic frost</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">sunset</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">amber & rose</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">matrix</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">phosphor green</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">tokyonight</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">tokyo neon</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">gruvbox</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">retro warm</span></div>
+          <div class="p-3 bg-custom-surface border border-custom rounded"><span class="text-custom-main font-bold">minimal</span><span class="text-custom-dim block text-[11px] mt-0.5 font-normal">grayscale</span></div>
+        </div>
+      </div>
+
+      <!-- TAB 4: LOGOS -->
+      <div id="doc-logos" class="hidden font-mono text-xs">
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">gnu</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">gnu_small</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">guix</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">arch</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">ubuntu</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">fedora</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">debian</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">nixos</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">alpine</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">pop_os</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">manjaro</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">gentoo</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">kali</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">void</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">opensuse</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">artix</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">endeavouros</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">linuxmint</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">zorin</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">elementary</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">slackware</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">freebsd</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">redhat</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">rocky</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">garuda</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">parrot</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">tux</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">windows11</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">windows10</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">macos</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">nour</div>
+          <div class="p-2.5 bg-custom-surface border border-custom rounded text-custom-main font-semibold">badge</div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MINIMAL FOOTER -->
+  <footer class="border-t border-custom mt-16 py-8 font-mono text-xs text-custom-dim">
+    <div class="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div>nourfetch • MIT License • Pure Rust</div>
+      <div class="flex items-center gap-4">
+        <a href="https://github.com/itsraynour/nourfetch" target="_blank" class="hover:text-custom-main transition-colors">GitHub</a>
+        <a href="#overview" class="hover:text-custom-main transition-colors">Back to top</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- SCRIPTS -->
+  <script>
+    lucide.createIcons();
+
+    // Theme Management (Light / White Mode Default with High-Contrast Dark Mode)
+    function initTheme() {
+      const savedTheme = localStorage.getItem('nourfetch-theme');
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        // Default to Light / White Mode
+        document.documentElement.classList.remove('dark');
+      }
+    }
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('nourfetch-theme', isDark ? 'dark' : 'light');
+    }
+
+    initTheme();
+
+    // Mobile Navigation Menu Toggle
+    function toggleMobileMenu() {
+      const menu = document.getElementById('mobile-menu');
+      const icon = document.getElementById('mobile-menu-icon');
+      const isHidden = menu.classList.contains('hidden');
+      if (isHidden) {
+        menu.classList.remove('hidden');
+        icon.setAttribute('data-lucide', 'x');
+      } else {
+        menu.classList.add('hidden');
+        icon.setAttribute('data-lucide', 'menu');
+      }
+      lucide.createIcons();
+    }
+
+    function closeMobileMenu() {
+      const menu = document.getElementById('mobile-menu');
+      const icon = document.getElementById('mobile-menu-icon');
+      menu.classList.add('hidden');
+      icon.setAttribute('data-lucide', 'menu');
+      lucide.createIcons();
+    }
+
+    // Install command tabs
+    const installSnippets = {
+      powershell: 'irm https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.ps1 | iex',
+      bash: 'curl -fsSL https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.sh | sh',
+      cargo: 'cargo install --git https://github.com/itsraynour/nourfetch.git'
+    };
+
+    function setInstallCmd(target) {
+      document.getElementById('install-cmd').textContent = installSnippets[target];
+      ['powershell', 'bash', 'cargo'].forEach(t => {
+        const id = t === 'powershell' ? 'tab-ps' : t === 'bash' ? 'tab-bash' : 'tab-cargo';
+        const el = document.getElementById(id);
+        if (t === target) {
+          el.className = 'text-custom-main font-semibold border-b-2 border-custom-accent pb-0.5';
+        } else {
+          el.className = 'hover:text-custom-main transition-colors pb-0.5';
+        }
+      });
+    }
+
+    function copyInstallCmd() {
+      const text = document.getElementById('install-cmd').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const label = document.getElementById('copy-label');
+        label.textContent = 'Copied';
+        setTimeout(() => { label.textContent = 'Copy'; }, 1500);
+      });
+    }
+
+    // Docs tab switcher
+    function setDocTab(tab) {
+      ['cli', 'config', 'themes', 'logos'].forEach(t => {
+        const btn = document.getElementById(`doc-btn-${t}`);
+        const view = document.getElementById(`doc-${t}`);
+        if (t === tab) {
+          btn.className = 'text-custom-main font-bold border-b-2 border-custom-accent pb-1';
+          view.classList.remove('hidden');
+        } else {
+          btn.className = 'hover:text-custom-main transition-colors pb-1';
+          view.classList.add('hidden');
+        }
+      });
+    }
+
+    // ===================================
+    // TERMINAL SIMULATOR LOGIC (Enhanced Contrast)
+    // ===================================
+    let simIcons = true;
+
+    const themeMap = {
+      nour: { pri: '#818cf8', sec: '#c084fc', lbl: '#38bdf8', txt: '#f8fafc', barFill: '#818cf8', barEmp: '#2a324b' },
+      cyberpunk: { pri: '#ff2a85', sec: '#00ffee', lbl: '#00f0ff', txt: '#ffffff', barFill: '#ff2a85', barEmp: '#3f1849' },
+      catppuccin: { pri: '#cba6f7', sec: '#89b4fa', lbl: '#94e2d5', txt: '#cdd6f4', barFill: '#cba6f7', barEmp: '#313244' },
+      dracula: { pri: '#bd93f9', sec: '#ff79c6', lbl: '#8be9fd', txt: '#f8f8f2', barFill: '#bd93f9', barEmp: '#343746' },
+      nord: { pri: '#88c0d0', sec: '#81a1c1', lbl: '#8fbcbb', txt: '#eceff4', barFill: '#88c0d0', barEmp: '#2e3440' },
+      sunset: { pri: '#fb923c', sec: '#f43f5e', lbl: '#fdba74', txt: '#fff1f2', barFill: '#fb923c', barEmp: '#4a1d26' },
+      matrix: { pri: '#00ff66', sec: '#22c55e', lbl: '#4ade80', txt: '#f0fdf4', barFill: '#00ff66', barEmp: '#0d3019' },
+      tokyonight: { pri: '#7aa2f7', sec: '#bb9af7', lbl: '#2ac3de', txt: '#c0caf5', barFill: '#7aa2f7', barEmp: '#1f2335' },
+      gruvbox: { pri: '#fe8019', sec: '#fabd2f', lbl: '#8ec07c', txt: '#ebdbb2', barFill: '#fe8019', barEmp: '#3c3836' },
+      minimal: { pri: '#ffffff', sec: '#d1d5db', lbl: '#e5e7eb', txt: '#f9fafb', barFill: '#ffffff', barEmp: '#374151' },
+    };
+
+    const logosMap = {
+      windows11: ["  ████████   ████████  ", "  ████████   ████████  ", "  ████████   ████████  ", "  ████████   ████████  ", "                       ", "  ████████   ████████  ", "  ████████   ████████  ", "  ████████   ████████  ", "  ████████   ████████  "],
+      gnu: ["    ,           ,  ", "   /             \\ ", "  ((__-^^-,-^^-__))", "    `-_---'  `---_-'", "     `--|o`   'o|--'", "        \\  `  /    ", "         ): :(     ", "         :o_o:     ", "          \"-\"      "],
+      gnu_small: ["  .---.  .---.  ", " /     \\/     \\ ", "| () () () () | ", " \\     /\\     / ", "  `---'  `---'  "],
+      guix: [" |---\\          /---| ", " |    \\        /    | ", " |     \\  /\\  /     | ", " |  /\\  \\/  \\/  /\\  | ", " | /  \\        /  \\ | ", " |/    \\______/    \\| "],
+      arch: [
+        "                   -`",
+        "                  .o+`",
+        "                 `ooo/",
+        "                `+oooo:",
+        "               `+oooooo:",
+        "               -+oooooo+:",
+        "             `/:-:++oooo+:",
+        "            `/++++/+++++++:",
+        "           `/++++++++++++++:",
+        "          `/+++oooooooooooo/`",
+        "         ./ooosssso++osssssso+`",
+        "        .oossssso-````/ossssss+`",
+        "       -osssssso.      :ssssssso.",
+        "      :osssssss/        osssso+++.",
+        "     /ossssssss/        +ssssooo/-",
+        "   `/ossssso+/:-        -:/+osssso+-",
+        "  `+sso+:-`                 `.-/+oso:",
+        " `++:.                           `-/+/",
+        " .`                                 `/"
+      ],
+      arch_small: ["      /\\      ", "     /  \\     ", "    /\\   \\    ", "   /      \\   ", "  /   ,,   \\  ", " /   |  |  -\\ ", "/_-''    ''-_\\"],
+      ubuntu: [
+        "            .-/+oossssoo+\\\\-.",
+        "        ´:+ssssssssssssssssss+:`",
+        "      -+ssssssssssssssssssyyssss+-",
+        "    .ossssssssssssssssssdMMMNysssso.",
+        "   /ssssssssssshdmmNNmmyNMMMMhssssss\\\\",
+        "  +ssssssssshmydMMMMMMMNddddyssssssss+",
+        " /sssssssshNMMMyhhyyyyhmNMMMNhssssssss\\\\",
+        ".ssssssssdMMMNhsssssssssshNMMMdssssssss.",
+        "+sssshhhyNMMNyssssssssssssyNMMMysssssss+",
+        "ossyNMMMNyMMhsssssssssssssshmmmhssssssso",
+        "ossyNMMMNyMMhsssssssssssssshmmmhssssssso",
+        "+sssshhhyNMMNyssssssssssssyNMMMysssssss+",
+        ".ssssssssdMMMNhsssssssssshNMMMdssssssss.",
+        " \\\\sssssssshNMMMyhhyyyyhdNMMMNhssssssss/",
+        "  +sssssssssdmydMMMMMMMMddddyssssssss+",
+        "   \\\\ssssssssssshdmNNNNmyNMMMMhssssss/",
+        "    .ossssssssssssssssssdMMMNysssso.",
+        "      -+sssssssssssssssssyyyssss+-",
+        "        `:+ssssssssssssssssss+:`",
+        "            .-\\\\+oossssoo+/-."
+      ],
+      ubuntu_small: [
+        "         _",
+        "     ---(_)",
+        " _/  ---  \\\\",
+        "(_) |   |",
+        "  \\\\  --- _/",
+        "     ---(_)"
+      ],
+      fedora: [
+        "             .',;::::;,'.",
+        "         .';:cccccccccccc:;,.",
+        "      .;cccccccccccccccccccccc;.",
+        "    .:cccccccccccccccccccccccccc:.",
+        "  .;ccccccccccccc;.:dddl:.;ccccccc;.",
+        " .:ccccccccccccc;OWMKOOXMWd;ccccccc:.",
+        ".:ccccccccccccc;KMMc;cc;xMMc;ccccccc:.",
+        ",cccccccccccccc;MMM.;cc;;WW:;cccccccc,",
+        ":cccccccccccccc;MMM.;cccccccccccccccc:",
+        ":ccccccc;oxOOOo;MMM0OOk.;cccccccccccc:",
+        "cccccc;0MMKxdd:;MMMkddc.;cccccccccccc;",
+        "ccccc;XM0';cccc;MMM.;cccccccccccccccc'",
+        "ccccc;MMo;ccccc;MMW.;ccccccccccccccc;",
+        "ccccc;0MNc.ccc.xMMd;ccccccccccccccc;",
+        "cccccc;dNMWXXXWM0:;cccccccccccccc:,",
+        "cccccccc;.:odl:.;cccccccccccccc:;,.",
+        ":cccccccccccccccccccccccccccc:'.",
+        ".:cccccccccccccccccccccc:;,..",
+        "  '::cccccccccccccc::;,."
+      ],
+      fedora_small: [
+        "        ,'''''.",
+        "       |   ,.  |",
+        "       |  |  '_'",
+        "  ,....|  |..",
+        ".'  ,_;|   ..'",
+        "|  |   |  |",
+        "|  ',_,'  |",
+        " '.     ,'",
+        "   '''''"
+      ],
+      fedora_old: [
+        "          /:-------------:\\\\",
+        "       :-------------------::",
+        "     :-----------/shhOHbmp---:\\\\",
+        "   /-----------omMMMNNNMMD  ---:",
+        "  :-----------sMMMMNMNMP.    ---:",
+        " :-----------:MMMdP-------    ---\\\\",
+        ",------------:MMMd--------    ---:",
+        ":------------:MMMd-------    .---:",
+        ":----    oNMMMMMMMMMNho     .----:",
+        ":--     .+shhhMMMmhhy++   .------/",
+        ":-    -------:MMMd--------------:",
+        ":-   --------/MMMd-------------;",
+        ":-    ------/hMMMy------------:",
+        ":-- :dMNdhhdNMMNo------------;",
+        ":---:sdNMMMMNds:------------:",
+        ":------:://:-------------::",
+        ":---------------------://"
+      ],
+      debian: [
+        "       _,met$$$$$gg.",
+        "    ,g$$$$$$$$$$$$$$$P.",
+        "  ,g$$P\"        \"\"\"Y$$\".",
+        " ,$$P'              `$$$.",
+        "',$$P       ,ggs.     `$$b:",
+        "`d$$'     ,$P\"'   .    $$$",
+        " $$P      d$'     ,    $$P",
+        " $$:      $$.   -    ,d$$'",
+        " $$;      Y$b._   _,d$P'",
+        " Y$$.    `.`\"Y$$$$P\"'",
+        " `$$b      \"-.__",
+        "  `Y$$",
+        "   `Y$$.",
+        "     `$$b.",
+        "       `Y$$b.",
+        "          `\"Y$b._",
+        "              `\"\"\""
+      ],
+      debian_small: [
+        "  _____",
+        " /  __ \\\\",
+        "|  /    |",
+        "|  \\\\___-",
+        "-_",
+        "  --_"
+      ],
+      nixos: [
+        "          ▗▄▄▄       ▗▄▄▄▄    ▄▄▄▖",
+        "          ▜███▙       ▜███▙  ▟███▛",
+        "           ▜███▙       ▜███▙▟███▛",
+        "            ▜███▙       ▜██████▛",
+        "     ▟█████████████████▙ ▜████▛     ▟▙",
+        "    ▟███████████████████▙ ▜███▙    ▟██▙",
+        "           ▄▄▄▄▖           ▜███▙  ▟███▛",
+        "          ▟███▛             ▜██▛ ▟███▛",
+        "         ▟███▛               ▜▛ ▟███▛",
+        "▟███████████▛                  ▟██████████▙",
+        "▜██████████▛                  ▟███████████▛",
+        "      ▟███▛ ▟▙               ▟███▛",
+        "     ▟███▛ ▟██▙             ▟███▛",
+        "    ▟███▛  ▜███▙           ▝▀▀▀▀",
+        "    ▜██▛    ▜███▙ ▜██████████████████▛",
+        "     ▜▛     ▟████▙ ▜████████████████▛",
+        "           ▟██████▙       ▜███▙",
+        "          ▟███▛▜███▙       ▜███▙",
+        "         ▟███▛  ▜███▙       ▜███▙",
+        "         ▝▀▀▀    ▀▀▀▀▘       ▀▀▀▘"
+      ],
+      nixos_small: [
+        "    \\\\\\\\  \\\\\\\\ //",
+        " ==\\\\\\\\__\\\\\\\\/ //",
+        "   //   \\\\\\\\//",
+        "==//     //==",
+        " //\\\\\\\\___//",
+        "// /\\\\\\\\  \\\\\\\\==",
+        "  // \\\\\\\\  \\\\\\\\"
+      ],
+      nixos_old: [
+        "          ::::.    ':::::     ::::'",
+        "          ':::::    ':::::.  ::::'",
+        "            :::::     '::::.:::::",
+        "      .......:::::..... ::::::::",
+        "     ::::::::::::::::::. ::::::    ::::.",
+        "    ::::::::::::::::::::: :::::.  .::::'",
+        "           .....           ::::' :::::'",
+        "          :::::            '::' :::::'",
+        " ........:::::               ' :::::::::::.",
+        ":::::::::::::                 :::::::::::::",
+        " ::::::::::: ..              :::::",
+        "     .::::: .:::            :::::",
+        "    .:::::  :::::          '''''    .....",
+        "    :::::   ':::::.  ......:::::::::::::'",
+        "     :::     ::::::. ':::::::::::::::::'",
+        "            .:::::::: '::::::::::",
+        "           .::::''::::.     '::::.",
+        "          .::::'   ::::.     '::::.",
+        "         .::::      ::::      '::::."
+      ],
+      alpine: [
+        "       .hddddddddddddddddddddddh.",
+        "      :dddddddddddddddddddddddddd:",
+        "     /dddddddddddddddddddddddddddd/",
+        "    +dddddddddddddddddddddddddddddd+",
+        "  `sdddddddddddddddddddddddddddddddds`",
+        " `ydddddddddddd++hdddddddddddddddddddy`",
+        ".hddddddddddd+`  `+ddddh:-sdddddddddddh.",
+        "hdddddddddd+`      `+y:    .sddddddddddh",
+        "ddddddddh+`   `//`   `.`     -sddddddddd",
+        "ddddddh+`   `/hddh/`   `:s-    -sddddddd",
+        "ddddh+`   `/+/dddddh/`   `+s-    -sddddd",
+        "ddd+`   `/o` :dddddddh/`   `oy-    .yddd",
+        "hdddyo+ohddyosdddddddddho+oydddy++ohdddh",
+        ".hddddddddddddddddddddddddddddddddddddh.",
+        " `yddddddddddddddddddddddddddddddddddy`",
+        "  `sdddddddddddddddddddddddddddddddds`",
+        "    +dddddddddddddddddddddddddddddd+",
+        "     /dddddddddddddddddddddddddddd/",
+        "      :dddddddddddddddddddddddddd:",
+        "       .hddddddddddddddddddddddh."
+      ],
+      alpine_small: [
+        "   /\\\\ /\\\\",
+        "  // \\\\  \\\\",
+        " //   \\\\  \\\\",
+        "///    \\\\  \\\\",
+        "//      \\\\  \\\\",
+        "         \\\\"
+      ],
+      pop_os: [
+        "             /////////////",
+        "         /////////////////////",
+        "      ///////*767////////////////",
+        "    //////7676767676*//////////////",
+        "   /////76767//7676767//////////////",
+        "  /////767676///*76767///////////////",
+        " ///////767676///76767.///7676*///////",
+        "/////////767676//76767///767676////////",
+        "//////////76767676767////76767/////////",
+        "///////////76767676//////7676//////////",
+        "////////////,7676,///////767///////////",
+        "/////////////*7676///////76////////////",
+        "///////////////7676////////////////////",
+        " ///////////////7676///767////////////",
+        "  //////////////////////'////////////",
+        "   //////.7676767676767676767,//////",
+        "    /////767676767676767676767/////",
+        "      ///////////////////////////",
+        "         /////////////////////",
+        "             /////////////"
+      ],
+      pop_os_small: [
+        "______",
+        "\\\\   _ \\\\        __",
+        " \\\\ \\\\ \\\\ \\\\      / /",
+        "  \\\\ \\\\_\\\\ \\\\    / /",
+        "   \\\\  ___\\\\  /_/",
+        "    \\\\ \\\\    _",
+        "   __\\\\_\\\\__(_)_",
+        "  (___________)`"
+      ],
+      manjaro: [
+        "██████████████████  ████████",
+        "██████████████████  ████████",
+        "██████████████████  ████████",
+        "██████████████████  ████████",
+        "████████            ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████",
+        "████████  ████████  ████████"
+      ],
+      manjaro_small: [
+        "||||||||| ||||",
+        "||||||||| ||||",
+        "||||      ||||",
+        "|||| |||| ||||",
+        "|||| |||| ||||",
+        "|||| |||| ||||",
+        "|||| |||| ||||"
+      ],
+      gentoo: [
+        "         -/oyddmdhs+:.",
+        "     -odNMMMMMMMMNNmhy+-`",
+        "   -yNMMMMMMMMMMMNNNmmdhy+-",
+        " `omMMMMMMMMMMMMNmdmmmmddhhy/`",
+        " omMMMMMMMMMMNhhyyyohmdddhhhdo`",
+        ".ydMMMMMMMMMMdhs++so/smdddhhhhdm+`",
+        " oyhdmNMMMMMMMNdyooydmddddhhhhyhNd.",
+        "  :oyhhdNNMMMMMMMNNNmmdddhhhhhyymMh",
+        "    .:+sydNMMMMMNNNmmmdddhhhhhhmMmy",
+        "       /mMMMMMMNNNmmmdddhhhhhmMNhs:",
+        "    `oNMMMMMMMNNNmmmddddhhdmMNhs+`",
+        "  `sNMMMMMMMMNNNmmmdddddmNMmhs/.",
+        " /NMMMMMMMMNNNNmmmdddmNMNdso:`",
+        "+MMMMMMMNNNNNmmmmdmNMNdso/-",
+        "yMMNNNNNNNmmmmmNNMmhs+/-`",
+        "/hMMNNNNNNNNMNdhs++/-`",
+        "`/ohdmmddhys+++/:.`",
+        "  `-//////:--."
+      ],
+      gentoo_small: ["  _-----_    ", " /       \\   ", "|  (o) (o) |  ", "|   __    |  ", " \\_______/   "],
+      kali: ["  .......      ", "  .:::::::.    ", "  .::  .::.    ", "  .::.  .::    ", "  .::  .::.    ", "  .:::::::.    "],
+      void: ["    _______    ", "   /   ____\\   ", "  /   /        ", " |   |   ___   ", "  \\   \\_/   \\  ", "   \\_______/   "],
+      opensuse: [
+        "           .;ldkO0000Okdl;.",
+        "       .;d00xl:^''''''^:ok00d;.",
+        "     .d00l'                'o00d.",
+        "   .d0Kd'  Okxol:;,.          :O0d.",
+        "  .OKKKK0kOKKKKKKKKKKOxo:,      lKO.",
+        " ,0KKKKKKKKKKKKKKKK0P^,,,^dx:    ;00,",
+        ".OKKKKKKKKKKKKKKKKk'.oOPPb.'0k.   cKO.",
+        ":KKKKKKKKKKKKKKKK: kKx..dd lKd   'OK:",
+        "dKKKKKKKKKKOx0KKKd ^0KKKO' kKKc   dKd",
+        "dKKKKKKKKKK;.;oOKx,..^..;kKKK0.  dKd",
+        ":KKKKKKKKKK0o;...^cdxxOK0O/^^'  .0K:",
+        " kKKKKKKKKKKKKK0x;,,......,;od  lKk",
+        " '0KKKKKKKKKKKKKKKKKKKK00KKOo^  c00'",
+        "  'kKKKOxddxkOO00000Okxoc;''   .dKk'",
+        "    l0Ko.                    .c00l'",
+        "     'l0Kk:.              .;xK0l'",
+        "        'lkK0xl:;,,,,;:ldO0kl'",
+        "            '^:ldxkkkkxdl:^'"
+      ],
+      opensuse_small: [
+        "  _______",
+        "__|   __ \\\\",
+        "     / .\\\\ \\\\",
+        "     \\\\__/ |",
+        "   _______|",
+        "   \\\\_______",
+        "__________/"
+      ],
+      artix: [
+        "                   '",
+        "                  'o'",
+        "                 'ooo'",
+        "                'ooxoo'",
+        "               'ooxxxoo'",
+        "              'oookkxxoo'",
+        "             'oiioxkkxxoo'",
+        "            ':;:iiiioxxxoo'",
+        "               `'.;::ioxxoo'",
+        "          '-.      `':;jiooo'",
+        "         'oooio-..     `'i:io'",
+        "        'ooooxxxxoio:,.   `'-;'",
+        "       'ooooxxxxxkkxoooIi:-.  `'",
+        "      'ooooxxxxxkkkkxoiiiiiji'",
+        "     'ooooxxxxxkxxoiiii:'`     .i'",
+        "    'ooooxxxxxoi:::'`       .;ioxo'",
+        "   'ooooxooi::'`         .:iiixkxxo'",
+        "  'ooooi:'`                `'';ioxxo'",
+        " 'i:'`                          '':io'",
+        "'`                                   `'"
+      ],
+      artix_small: [
+        "      /\\\\",
+        "     /  \\\\",
+        "    /`'.,\\\\",
+        "   /     ',",
+        "  /      ,`\\\\",
+        " /   ,.'`.  \\\\",
+        "/.,'`     `'.\\\\"
+      ],
+      endeavouros: ["      /\\      ", "     /  \\     ", "    / /\\ \\    ", "   / /  \\ \\   ", "  / /    \\ \\  ", " / /______\\ \\ ", "/____________\\"],
+      linuxmint: [
+        "             ...-:::::-...",
+        "          .-MMMMMMMMMMMMMMM-.",
+        "      .-MMMM`..-:::::::-..`MMMM-.",
+        "    .:MMMM.:MMMMMMMMMMMMMMM:.MMMM:.",
+        "   -MMM-M---MMMMMMMMMMMMMMMMMMM.MMM-",
+        " `:MMM:MM`  :MMMM:....::-...-MMMM:MMM:`",
+        " :MMM:MMM`  :MM:`  ``    ``  `:MMM:MMM:",
+        ".MMM.MMMM`  :MM.  -MM.  .MM-  `MMMM.MMM.",
+        ":MMM:MMMM`  :MM.  -MM-  .MM:  `MMMM-MMM:",
+        ":MMM:MMMM`  :MM.  -MM-  .MM:  `MMMM:MMM:",
+        ":MMM:MMMM`  :MM.  -MM-  .MM:  `MMMM-MMM:",
+        ".MMM.MMMM`  :MM:--:MM:--:MM:  `MMMM.MMM.",
+        " :MMM:MMM-  `-MMMMMMMMMMMM-`  -MMM-MMM:",
+        "  :MMM:MMM:`                `:MMM:MMM:",
+        "   .MMM.MMMM:--------------:MMMM.MMM.",
+        "     '-MMMM.-MMMMMMMMMMMMMMM-.MMMM-'",
+        "       '.-MMMM``--:::::--``MMMM-.'",
+        "            '-MMMMMMMMMMMMM-'",
+        "               ``-:::::-``"
+      ],
+      linuxmint_small: [
+        " ___________",
+        "|_          \\\\",
+        "  | | _____ |",
+        "  | | | | | |",
+        "  | | | | | |",
+        "  | \\\\_____/ |",
+        "  \\\\_________/"
+      ],
+      linuxmint_old: [
+        "MMMMMMMMMMMMMMMMMMMMMMMMMmds+.",
+        "MMm----::-://////////////oymNMd+`",
+        "MMd      /++                -sNMd:",
+        "MMNso/`  dMM    `.::-. .-::.` .hMN:",
+        "ddddMMh  dMM   :hNMNMNhNMNMNh: `NMm",
+        "    NMm  dMM  .NMN/-+MMM+-/NMN` dMM",
+        "    NMm  dMM  -MMm  `MMM   dMM. dMM",
+        "    NMm  dMM  -MMm  `MMM   dMM. dMM",
+        "    NMm  dMM  .mmd  `mmm   yMM. dMM",
+        "    NMm  dMM`  ..`   ...   ydm. dMM",
+        "    hMM- +MMd/-------...-:sdds  dMM",
+        "    -NMm- :hNMNNNmdddddddddy/`  dMM",
+        "     -dMNs-``-::::-------.``    dMM",
+        "      `/dMNmy+/:-------------:/yMMM",
+        "         ./ydNMMMMMMMMMMMMMMMMMMMMM",
+        "            .MMMMMMMMMMMMMMMMMMM"
+      ],
+      zorin: [
+        "        `osssssssssssssssssssso`",
+        "       .osssssssssssssssssssssso.",
+        "      .+oooooooooooooooooooooooo+.",
+        "",
+        "",
+        "  `::::::::::::::::::::::.         .:`",
+        " `+ssssssssssssssssss+:.`     `.:+ssso`",
+        ".ossssssssssssssso/.       `-+ossssssso.",
+        "ssssssssssssso/-`      `-/osssssssssssss",
+        ".ossssssso/-`      .-/ossssssssssssssso.",
+        " `+sss+:.      `.:+ssssssssssssssssss+`",
+        "  `:.         .::::::::::::::::::::::`",
+        "",
+        "",
+        "      .+oooooooooooooooooooooooo+.",
+        "       -osssssssssssssssssssssso-",
+        "        `osssssssssssssssssssso`"
+      ],
+      zorin_small: [
+        "  ________  ",
+        " / ______/  ",
+        " | |   / /  ",
+        " | |  / /   ",
+        " | | / /    ",
+        " | |/ /___  ",
+        " /_______/  "
+      ],
+      elementary: [
+        "         eeeeeeeeeeeeeeeee",
+        "      eeeeeeeeeeeeeeeeeeeeeee",
+        "    eeeee  eeeeeeeeeeee   eeeee",
+        "  eeee   eeeee       eee     eeee",
+        " eeee   eeee          eee     eeee",
+        "eee    eee            eee       eee",
+        "eee   eee            eee        eee",
+        "ee    eee           eeee       eeee",
+        "ee    eee         eeeee      eeeeee",
+        "ee    eee       eeeee      eeeee ee",
+        "eee   eeee   eeeeee      eeeee  eee",
+        "eee    eeeeeeeeee     eeeeee    eee",
+        " eeeeeeeeeeeeeeeeeeeeeeee    eeeee",
+        "  eeeeeeee eeeeeeeeeeee      eeee",
+        "    eeeee                 eeeee",
+        "      eeeeeee         eeeeeee",
+        "         eeeeeeeeeeeeeeeee"
+      ],
+      elementary_small: [
+        "  _______",
+        " / ____  \\\\",
+        "/  |  /  /\\\\",
+        "|__\\\\ /  / |",
+        "\\\\   /__/  /",
+        " \\\\_______/"
+      ],
+      slackware: [
+        "                  :::::::",
+        "            :::::::::::::::::::",
+        "         :::::::::::::::::::::::::",
+        "       ::::::::cllcccccllllllll::::::",
+        "    :::::::::lc               dc:::::::",
+        "   ::::::::cl   clllccllll    oc:::::::::",
+        "  :::::::::o   lc::::::::co   oc::::::::::",
+        " ::::::::::o    cccclc:::::clcc::::::::::::",
+        " :::::::::::lc        cclccclc:::::::::::::",
+        "::::::::::::::lcclcc          lc::::::::::::",
+        "::::::::::cclcc:::::lccclc     oc:::::::::::",
+        "::::::::::o    l::::::::::l    lc:::::::::::",
+        " :::::cll:o     clcllcccll     o:::::::::::",
+        " :::::occ:o                  clc:::::::::::",
+        "  ::::ocl:ccslclccclclccclclc:::::::::::::",
+        "   :::oclcccccccccccccllllllllllllll:::::",
+        "    ::lcc1lcccccccccccccccccccccccco::::",
+        "      ::::::::::::::::::::::::::::::::",
+        "        ::::::::::::::::::::::::::::",
+        "           ::::::::::::::::::::::",
+        "                ::::::::::::"
+      ],
+      slackware_small: [
+        "   ________",
+        "  /  ______|",
+        "  | |______",
+        "  \\\\______  \\\\",
+        "   ______| |",
+        "| |________/",
+        "|____________"
+      ],
+      freebsd: [
+        "   ```                        `",
+        "  ` `.....---.......--.```   -/",
+        "  +o   .--`         /y:`      +.",
+        "   yo`:.            :o      `+-",
+        "    y/               -/`   -o/",
+        "   .-                  ::/sy+:.",
+        "   /                     `--  /",
+        "  `:                          :`",
+        "  `:                          :`",
+        "   /                          /",
+        "   .-                        -.",
+        "    --                      -.",
+        "     `:`                  `:`",
+        "       .--             `--.",
+        "          .---.....----."
+      ],
+      freebsd_small: [
+        "/\\\\,-''''''-,/\\\\",
+        "\\\\_)       (_/",
+        "|           |",
+        "|           |",
+        " ;         ;",
+        "  '-_____-'"
+      ],
+      redhat: [
+        "           .MMM..:MMMMMMM",
+        "          MMMMMMMMMMMMMMMMMM",
+        "          MMMMMMMMMMMMMMMMMMMM.",
+        "         MMMMMMMMMMMMMMMMMMMMMM",
+        "        ,MMMMMMMMMMMMMMMMMMMMMM:",
+        "        MMMMMMMMMMMMMMMMMMMMMMMM",
+        "  .MMMM'  MMMMMMMMMMMMMMMMMMMMMM",
+        " MMMMMM    `MMMMMMMMMMMMMMMMMMMM.",
+        "MMMMMMMM      MMMMMMMMMMMMMMMMMM .",
+        "MMMMMMMMM.       `MMMMMMMMMMMMM' MM.",
+        "MMMMMMMMMMM.                     MMMM",
+        "`MMMMMMMMMMMMM.                 ,MMMMM.",
+        " `MMMMMMMMMMMMMMMMM.          ,MMMMMMMM.",
+        "    MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+        "      MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM:",
+        "         MMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+        "            `MMMMMMMMMMMMMMMMMMMMMMMM:",
+        "                ``MMMMMMMMMMMMMMMMM'"
+      ],
+      redhat_small: [
+        "    .---.    ",
+        "   /     \\\\   ",
+        " _/_______\\\\_ ",
+        "(___________)",
+        "  \\\\_______/  "
+      ],
+      rocky: [
+        "          __wgliliiligw_,",
+        "       _williiiiiiliilililw,",
+        "     _%iiiiiilililiiiiiiiiiii_",
+        "   .Qliiiililiiiiiiililililiilm.",
+        "  _iiiiiliiiiiililiiiiiiiiiiliil,",
+        " .lililiiilililiiiilililililiiiii,",
+        "_liiiiiiliiiiiiiliiiiiF{iiiiiilili,",
+        "jliililiiilililiiili@`  ~ililiiiiiL",
+        "iiiliiiiliiiiiiili>`      ~liililii",
+        "liliiiliiilililii`         -9liiiil",
+        "iiiiiliiliiiiii~             \"4lili",
+        "4ililiiiiilil~|      -w,       )4lf",
+        "-liiiiililiF'       _liig,       )'",
+        " )iiiliii@`       _QIililig,",
+        "  )iiii>`       .Qliliiiililw",
+        "   )<>~       .mliiiiiliiiiiil,",
+        "            _gllilililiililii~",
+        "           giliiiiiiiiiiiiT`",
+        "          -^~$ililili@~~'"
+      ],
+      rocky_small: [
+        "    `-/+++++++++/-.`",
+        " `-+++++++++++++++++-`",
+        ".+++++++++++++++++++++.",
+        "-+++++++++++++++++++++++.",
+        "+++++++++++++++/-/+++++++",
+        "+++++++++++++/.   ./+++++",
+        "+++++++++++:.       ./+++",
+        "+++++++++:`   `:/:`   .:/",
+        "-++++++:`   .:+++++:`",
+        " .+++-`   ./+++++++++:`",
+        "  `-`   ./+++++++++++-",
+        "       -+++++++++:-.`"
+      ],
+      garuda: ["    /\\        ", "   /  \\       ", "  / /\\ \\      ", " / /__\\ \\     ", "/________\\    "],
+      parrot: [
+        "  `:oho/-`",
+        "`mMMMMMMMMMMMNmmdhy-",
+        " dMMMMMMMMMMMMMMMMMMs`",
+        " +MMsohNMMMMMMMMMMMMMm/",
+        " .My   .+dMMMMMMMMMMMMMh.",
+        "  +       :NMMMMMMMMMMMMNo",
+        "           `yMMMMMMMMMMMMMm:",
+        "             /NMMMMMMMMMMMMMy`",
+        "              .hMMMMMMMMMMMMMN+",
+        "                  ``-NMMMMMMMMMd-",
+        "                     /MMMMMMMMMMMs`",
+        "                      mMMMMMMMsyNMN/",
+        "                      +MMMMMMMo  :sNh.",
+        "                      `NMMMMMMm     -o/",
+        "                       oMMMMMMM.",
+        "                       `NMMMMMM+",
+        "                        +MMd/NMh",
+        "                         mMm -mN`",
+        "                         /MM  `h:",
+        "                          dM`   .",
+        "                          :M-",
+        "                           d:",
+        "                           -+",
+        "                            -"
+      ],
+      parrot_small: ["   .---.       ", "  / .-. \\      ", "  | | | |      ", "  \\ `-' /      ", "   `---'       "],
+      tux: ["    .--.    ", "   |o_o |   ", "   |:_/ |   ", "  //   \\ \\  ", " (|     | ) ", "/'\\_   _/`\\ ", "\\___)=(___/ "],
+      macos: ["                    'c.          ", "                 ,xNMM.          ", "               .OMMMMo           ", "               OMMM0,            ", "     .;loddo:' lbdlob:.          ", "   cKMMMMMMMMMMNWMMMMMMK:.       ", " .KMMMMMMMMMMMMMMMMMMMMMWd.      ", " XMMMMMMMMMMMMMMMMMMMMMMMX.      ", ";MMMMMMMMMMMMMMMMMMMMMMMM:       ", ":MMMMMMMMMMMMMMMMMMMMMMMM:       "],
+      nour: ["  _  _  _____  _   _  ____   ", " | \\| |/ _ \\ || | | |  _ \\  ", " | .` | (_) | || |_| | |_) | ", " |_|\\_|\\___/ \\__/\\___/|_| \\_\\", "      N O U R F E T C H      "],
+      badge: ["  ╭─────────────╮  ", "  │    NOUR     │  ", "  │    FETCH    │  ", "  ╰─────────────╯  "]
+    };
+
+    function getBar(pct, style, th) {
+      let f = '█', e = '░';
+      if (style === 'block') { f = '■'; e = '□'; }
+      else if (style === 'circle') { f = '●'; e = '○'; }
+      else if (style === 'rounded') { f = '━'; e = '─'; }
+      else if (style === 'ascii') { f = '#'; e = '-'; }
+      const cnt = Math.round((pct / 100) * 12);
+      const empty = Math.max(0, 12 - cnt);
+      return `<span style="color:${th.barFill}">${f.repeat(cnt)}</span><span style="color:${th.barEmp}">${e.repeat(empty)}</span>`;
+    }
+
+    function toggleIcons() {
+      simIcons = !simIcons;
+      const btn = document.getElementById('icon-toggle');
+      btn.style.color = simIcons ? 'inherit' : 'var(--text-dim)';
+      updateSim();
+    }
+
+    function updateSim() {
+      const layout = document.getElementById('sim-layout').value;
+      const themeKey = document.getElementById('sim-theme').value;
+      const logoKey = document.getElementById('sim-logo').value;
+      const barStyle = document.getElementById('sim-bar').value;
+      const canvas = document.getElementById('terminal-canvas');
+      const th = themeMap[themeKey] || themeMap.nour;
+
+      let cmd = 'nourfetch';
+      if (layout === 'modern') cmd += ' --modern';
+      if (layout === 'compact') cmd += ' --compact';
+      if (layout === 'json') cmd += ' --json';
+      if (themeKey !== 'nour') cmd += ` -t ${themeKey}`;
+      if (logoKey !== 'windows11') cmd += ` -l ${logoKey}`;
+      if (!simIcons) cmd += ' --no-nerd-fonts';
+      document.getElementById('sim-cmd-title').textContent = cmd;
+
+      if (layout === 'json') {
+        const json = {
+          nourfetch_version: "1.0.2",
+          username: "Minxio",
+          hostname: "DESKTOP-OFS4MVS",
+          os: { name: "Windows 11 Pro", version: "25H2", build: "26200.9168", arch: "x86_64", kernel: "Windows NT 26200.9168" },
+          host: "Dell Inc. XPS 15 7590",
+          uptime_seconds: 2100,
+          cpu: { model: "Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz", cores: 16, threads: 16, freq_mhz: 2400 },
+          gpu: [
+            { name: "Intel(R) UHD Graphics 630", vendor: "Intel", total_vram_bytes: 134217728, used_vram_bytes: 0 },
+            { name: "NVIDIA GeForce GTX 1650", vendor: "NVIDIA", total_vram_bytes: 4129292288, used_vram_bytes: 0 }
+          ],
+          memory: { total_bytes: 25483632640, used_bytes: 12224163840, usage_percent: 48.0 }
+        };
+        canvas.innerHTML = `<pre class="text-slate-200 select-all leading-relaxed">${JSON.stringify(json, null, 2)}</pre>`;
+        return;
+      }
+
+      if (layout === 'compact') {
+        canvas.innerHTML = `
+          <div class="py-4 text-slate-200 leading-relaxed flex flex-wrap gap-2 font-medium">
+            <span style="color:${th.pri}">Minxio@DESKTOP-OFS4MVS</span>
+            <span class="text-slate-600">│</span>
+            <span style="color:${th.txt}">Windows 11 Pro</span>
+            <span class="text-slate-600">│</span>
+            <span style="color:${th.txt}">NT 26200</span>
+            <span class="text-slate-600">│</span>
+            <span style="color:${th.txt}">35m</span>
+            <span class="text-slate-600">│</span>
+            <span style="color:${th.txt}">11.4 GiB / 23.7 GiB (48%)</span>
+            <span class="text-slate-600">│</span>
+            <span style="color:${th.txt}">PowerShell</span>
+          </div>
+        `;
+        return;
+      }
+
+      const colorsRow = `
+        <div class="mt-4 pt-2 flex gap-1.5 select-none">
+          <span class="w-3.5 h-3 bg-black border border-slate-700 inline-block rounded-sm"></span>
+          <span class="w-3.5 h-3 bg-red-500 inline-block rounded-sm"></span>
+          <span class="w-3.5 h-3 bg-green-500 inline-block rounded-sm"></span>
+          <span class="w-3.5 h-3 bg-yellow-400 inline-block rounded-sm"></span>
+          <span class="w-3.5 h-3 bg-blue-500 inline-block rounded-sm"></span>
+          <span class="w-3.5 h-3 bg-purple-500 inline-block rounded-sm"></span>
+          <span class="w-3.5 h-3 bg-cyan-400 inline-block rounded-sm"></span>
+          <span class="w-3.5 h-3 bg-slate-200 inline-block rounded-sm"></span>
+        </div>
+      `;
+
+      if (layout === 'modern') {
+        canvas.innerHTML = `
+          <div class="border border-slate-700/60 p-4 max-w-xl bg-slate-950/60 rounded">
+            <div class="pb-2 mb-2 border-b border-slate-700/60 flex justify-between font-bold">
+              <span style="color:${th.pri}">Minxio@DESKTOP-OFS4MVS</span>
+              <span class="text-slate-400 text-[11px] font-normal">nourfetch 1.0.2</span>
+            </div>
+            <div class="space-y-1.5 py-1 text-[11px]">
+              <div class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">SYSTEM</div>
+              <div><span style="color:${th.lbl}" class="font-medium">OS:</span> <span style="color:${th.txt}">Windows 11 Pro (25H2) [x86_64]</span></div>
+              <div><span style="color:${th.lbl}" class="font-medium">Host:</span> <span style="color:${th.txt}">Dell Inc. XPS 15 7590</span></div>
+              <div><span style="color:${th.lbl}" class="font-medium">Kernel:</span> <span style="color:${th.txt}">Windows NT 26200.9168</span></div>
+              <div><span style="color:${th.lbl}" class="font-medium">Uptime:</span> <span style="color:${th.txt}">35m</span></div>
+              <div><span style="color:${th.lbl}" class="font-medium">Shell:</span> <span style="color:${th.txt}">PowerShell</span></div>
+            </div>
+            <div class="space-y-1.5 py-2 border-t border-slate-700/60 mt-2 text-[11px]">
+              <div class="text-slate-400 text-[10px] uppercase font-bold tracking-wider">HARDWARE</div>
+              <div><span style="color:${th.lbl}" class="font-medium">CPU:</span> <span style="color:${th.txt}">Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz (16T) @ 2.40 GHz</span></div>
+              <div><span style="color:${th.lbl}" class="font-medium">GPU:</span> <span style="color:${th.txt}">Intel(R) UHD Graphics 630 (128.0 MiB)</span></div>
+              <div><span style="color:${th.lbl}" class="font-medium">GPU:</span> <span style="color:${th.txt}">NVIDIA GeForce GTX 1650 (3.85 GiB)</span></div>
+              <div><span style="color:${th.lbl}" class="font-medium">RAM:</span> <span style="color:${th.txt}">11.4 GiB / 23.7 GiB</span> ${getBar(48.0, barStyle, th)}</div>
+              <div><span style="color:${th.lbl}" class="font-medium">Disk (C:):</span> <span style="color:${th.txt}">171.1 GiB / 196.9 GiB</span> ${getBar(87, barStyle, th)}</div>
+            </div>
+            ${colorsRow}
+          </div>
+        `;
+        return;
+      }
+
+      // Classic
+      const logo = logosMap[logoKey] || logosMap.windows11;
+      const logoHtml = logo.map(l => `<div style="color:${th.pri}">${l.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`).join('');
+
+      canvas.innerHTML = `
+        <div class="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
+          <div class="font-mono font-bold leading-tight select-none flex-shrink-0">
+            ${logoHtml}
+          </div>
+          <div class="space-y-1.5 leading-snug flex-grow font-medium">
+            <div class="font-bold"><span style="color:${th.pri}">Minxio</span><span class="text-slate-400">@</span><span style="color:${th.sec}">DESKTOP-OFS4MVS</span></div>
+            <div class="text-slate-700 font-normal">────────────────────────────</div>
+            <div><span style="color:${th.lbl}">OS:</span> <span style="color:${th.txt}">Windows 11 Pro (25H2) [x86_64]</span></div>
+            <div><span style="color:${th.lbl}">Host:</span> <span style="color:${th.txt}">Dell Inc. XPS 15 7590</span></div>
+            <div><span style="color:${th.lbl}">Kernel:</span> <span style="color:${th.txt}">Windows NT 26200.9168</span></div>
+            <div><span style="color:${th.lbl}">Uptime:</span> <span style="color:${th.txt}">35m</span></div>
+            <div><span style="color:${th.lbl}">Packages:</span> <span style="color:${th.txt}">cargo (14)</span></div>
+            <div><span style="color:${th.lbl}">Shell:</span> <span style="color:${th.txt}">PowerShell</span></div>
+            <div><span style="color:${th.lbl}">CPU:</span> <span style="color:${th.txt}">Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz (16 threads) @ 2.40 GHz</span></div>
+            <div><span style="color:${th.lbl}">GPU:</span> <span style="color:${th.txt}">Intel(R) UHD Graphics 630 [128.0 MiB]</span></div>
+            <div><span style="color:${th.lbl}">GPU:</span> <span style="color:${th.txt}">NVIDIA GeForce GTX 1650 [3.85 GiB]</span></div>
+            <div class="flex items-center gap-2 flex-wrap"><span style="color:${th.lbl}">Memory:</span> <span style="color:${th.txt}">11.4 GiB / 23.7 GiB</span> ${getBar(48.0, barStyle, th)}</div>
+            <div class="flex items-center gap-2 flex-wrap"><span style="color:${th.lbl}">Disk (C:):</span> <span style="color:${th.txt}">171.1 GiB / 196.9 GiB</span> ${getBar(87, barStyle, th)}</div>
+            ${colorsRow}
+          </div>
+        </div>
+      `;
+    }
+
+    function copyOutput() {
+      const text = document.getElementById('terminal-canvas').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const label = document.getElementById('output-copy-label');
+        label.textContent = 'Copied';
+        setTimeout(() => { label.textContent = 'Copy'; }, 1500);
+      });
+    }
+
+    updateSim();
+  </script>
+</body>
+</html>
