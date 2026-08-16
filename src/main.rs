@@ -1,3 +1,12 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
+#![allow(non_upper_case_globals)]
+
 mod cli;
 mod config;
 mod logos;
@@ -11,6 +20,7 @@ use config::Config;
 use logos::Logo;
 use sys::SystemInfo;
 use theme::Theme;
+
 
 #[cfg(windows)]
 fn is_launched_from_explorer() -> bool {

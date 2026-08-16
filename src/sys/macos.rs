@@ -1,10 +1,12 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
 #![allow(dead_code)]
 
 use std::env;
 use std::process::Command;
 
 use super::common::{detect_shell, detect_terminal};
-use super::{BatteryInfo, CpuInfo, GpuInfo, MemoryInfo, SystemInfo};
+use super::{GpuInfo, SystemInfo};
 
 pub fn fetch_macos_info() -> SystemInfo {
     let mut info = SystemInfo::default();

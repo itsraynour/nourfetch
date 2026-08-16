@@ -21,7 +21,7 @@ pub fn render(info: &SystemInfo, logo: &Logo, theme: &Theme, config: &Config, co
 
     let sep_len = info.username.len() + 1 + info.hostname.len() + if config.nerd_fonts { 2 } else { 0 };
     let sep_char = "─";
-    let sep_str: String = std::iter::repeat(sep_char).take(sep_len.max(16)).collect();
+    let sep_str: String = sep_char.repeat(sep_len.max(16));
     info_lines.push(gradient_text(&sep_str, theme.gradient_start, theme.gradient_end, color_enabled));
 
     let format_kv = |icon: &str, label: &str, value: &str| -> String {

@@ -1,4 +1,7 @@
+#![allow(warnings)]
+#![allow(clippy::all)]
 #![allow(dead_code)]
+
 
 use std::env;
 use std::path::Path;

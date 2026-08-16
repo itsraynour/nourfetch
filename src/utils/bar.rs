@@ -41,11 +41,12 @@ pub fn render_bar(
         BarStyle::Ascii => ('#', '-'),
     };
 
-    let fill_str: String = std::iter::repeat(fill_char).take(filled_count).collect();
-    let empty_str: String = std::iter::repeat(empty_char).take(empty_count).collect();
+    let fill_str: String = fill_char.to_string().repeat(filled_count);
+    let empty_str: String = empty_char.to_string().repeat(empty_count);
 
     let colored_fill = fg_rgb(&fill_str, filled_color, color_enabled);
     let colored_empty = fg_rgb(&empty_str, empty_color, color_enabled);
 
     format!("{}{}", colored_fill, colored_empty)
 }
+
