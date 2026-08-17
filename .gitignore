@@ -1,0 +1,31 @@
+# Rust build artifacts
+/target
+/dist
+*.exe
+*.dll
+*.so
+*.dylib
+*.pdb
+
+# Rust backup and lock files
+**/*.rs.bk
+Cargo.lock
+
+# Environment and sensitive files
+.env
+.env.*
+*.secret
+*.pem
+*.key
+
+# IDE and OS files
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
+
+# Executable binaries
+/nourfetch
+
+
