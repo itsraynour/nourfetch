@@ -134,6 +134,11 @@ irm https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.ps1 | ie
 curl -fsSL https://raw.githubusercontent.com/itsraynour/nourfetch/main/install.sh | sh
 ```
 
+### Via Cargo (crates.io)
+```bash
+cargo install nourfetch
+```
+
 ### Via Winget (Windows Package Manager)
 ```cmd
 winget install itsraynour.nourfetch

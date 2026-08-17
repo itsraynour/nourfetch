@@ -8,6 +8,18 @@ readme = "README.md"
 license = "MIT"
 keywords = ["neofetch", "fastfetch", "sysinfo", "cli", "system-information"]
 categories = ["command-line-utilities"]
+repository = "https://github.com/itsraynour/nourfetch"
+homepage = "https://github.com/itsraynour/nourfetch"
+exclude = [
+    ".github/",
+    "manifests/",
+    "docs/",
+    "dist/",
+    "index.html",
+    "favicon.svg",
+    "install.*",
+    "uninstall.*",
+]
 
 [dependencies]
 
