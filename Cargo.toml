@@ -1,6 +1,6 @@
 [package]
 name = "nourfetch"
-version = "1.0.4"
+version = "1.0.5"
 edition = "2021"
 authors = ["Nour <contact@rayane.ma>"]
 description = "A fast and lightweight system information tool for Windows, Linux, and macOS"

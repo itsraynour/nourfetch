@@ -179,6 +179,52 @@ fn perform_self_uninstall(force: bool) {
         }
     }
 
+    fn is_same_file(p1: &std::path::Path, p2: &std::path::Path) -> bool {
+        if p1 == p2 {
+            return true;
+        }
+        if let (Ok(c1), Ok(c2)) = (p1.canonicalize(), p2.canonicalize()) {
+            if c1 == c2 {
+                return true;
+            }
+        }
+        let s1 = p1.to_string_lossy().trim_start_matches(r"\\?\").to_lowercase();
+        let s2 = p2.to_string_lossy().trim_start_matches(r"\\?\").to_lowercase();
+        s1 == s2
+    }
+
+    #[cfg(windows)]
+    fn remove_binary_windows(path: &std::path::Path) -> bool {
+        if std::fs::remove_file(path).is_ok() {
+            return true;
+        }
+
+        let temp_name = format!(
+            "{}.del_{}_{}.tmp",
+            path.file_name().and_then(|n| n.to_str()).unwrap_or("nourfetch"),
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+        );
+        let temp_path = path.with_file_name(temp_name);
+
+        let renamed = std::fs::rename(path, &temp_path).is_ok();
+        let target_to_delete = if renamed { &temp_path } else { path };
+
+        use std::os::windows::process::CommandExt;
+        let clean_path = target_to_delete.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+        let ps_cmd = format!(
+            "Start-Sleep -Milliseconds 400; Remove-Item -LiteralPath '{}' -Force -ErrorAction SilentlyContinue",
+            clean_path.replace('\'', "''")
+        );
+
+        let _ = std::process::Command::new("powershell")
+            .args(&["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &ps_cmd])
+            .creation_flags(0x08000000)
+            .spawn();
+
+        true
+    }
+
     let current_exe = std::env::current_exe().ok();
     let mut bin_paths: Vec<std::path::PathBuf> = Vec::new();
 
@@ -202,76 +248,60 @@ fn perform_self_uninstall(force: bool) {
         bin_paths.push(std::path::PathBuf::from("/usr/local/bin").join("nourfetch"));
     }
 
-    let mut current_exe_scheduled_on_windows = false;
+    let mut processed_current = false;
 
     for path in bin_paths {
         if path.exists() {
-            let is_current = current_exe.as_ref().map(|c| c == &path).unwrap_or(false);
-            if is_current {
-                #[cfg(windows)]
-                {
-                    use std::os::windows::process::CommandExt;
-                    let exe_str = path.display().to_string();
-                    let _ = std::process::Command::new("cmd")
-                        .args(&["/C", &format!("ping 127.0.0.1 -n 2 > nul & del /F /Q \"{}\"", exe_str)])
-                        .creation_flags(0x08000000)
-                        .spawn();
+            let is_current = current_exe.as_ref().map(|c| is_same_file(c, &path)).unwrap_or(false);
+            #[cfg(windows)]
+            {
+                if remove_binary_windows(&path) {
                     println!("  Removed executable: {}", path.display());
-                    current_exe_scheduled_on_windows = true;
                     removed_anything = true;
-                }
-                #[cfg(not(windows))]
-                {
-                    match std::fs::remove_file(&path) {
-                        Ok(_) => {
-                            println!("  Removed executable: {}", path.display());
-                            removed_anything = true;
-                        }
-                        Err(e) => {
-                            eprintln!("  Error: Failed to remove binary {}: {}", path.display(), e);
-                        }
+                    if is_current {
+                        processed_current = true;
                     }
                 }
-            } else {
+            }
+            #[cfg(not(windows))]
+            {
                 match std::fs::remove_file(&path) {
                     Ok(_) => {
                         println!("  Removed executable: {}", path.display());
                         removed_anything = true;
+                        if is_current {
+                            processed_current = true;
+                        }
                     }
                     Err(e) => {
-                        #[cfg(not(windows))]
                         if path.starts_with("/usr/local/bin") {
                             eprintln!("  Notice: Permission denied removing {}. Run: sudo rm {}", path.display(), path.display());
-                            continue;
+                        } else {
+                            eprintln!("  Error: Failed to remove binary {}: {}", path.display(), e);
                         }
-                        eprintln!("  Error: Failed to remove binary {}: {}", path.display(), e);
                     }
                 }
             }
         }
     }
 
-    if let Some(ref cur) = current_exe {
-        if cur.exists() {
-            #[cfg(windows)]
-            {
-                if !current_exe_scheduled_on_windows {
-                    use std::os::windows::process::CommandExt;
-                    let exe_str = cur.display().to_string();
-                    let _ = std::process::Command::new("cmd")
-                        .args(&["/C", &format!("ping 127.0.0.1 -n 2 > nul & del /F /Q \"{}\"", exe_str)])
-                        .creation_flags(0x08000000)
-                        .spawn();
-                    println!("  Removed binary: {}", cur.display());
-                    removed_anything = true;
-                }
-            }
-            #[cfg(not(windows))]
-            {
-                if cur.file_name().and_then(|n| n.to_str()).map(|n| n.starts_with("nourfetch")).unwrap_or(false) {
-                    if let Ok(_) = std::fs::remove_file(cur) {
+    if !processed_current {
+        if let Some(ref cur) = current_exe {
+            if cur.exists() {
+                #[cfg(windows)]
+                {
+                    if remove_binary_windows(cur) {
                         println!("  Removed binary: {}", cur.display());
                         removed_anything = true;
+                    }
+                }
+                #[cfg(not(windows))]
+                {
+                    if cur.file_name().and_then(|n| n.to_str()).map(|n| n.starts_with("nourfetch")).unwrap_or(false) {
+                        if let Ok(_) = std::fs::remove_file(cur) {
+                            println!("  Removed binary: {}", cur.display());
+                            removed_anything = true;
+                        }
                     }
                 }
             }

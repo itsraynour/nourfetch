@@ -4,13 +4,27 @@ All notable changes to **nourfetch** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2026-08-16
+
+### Fixed
+- **Windows Self-Uninstallation Reliability**:
+  - Implemented atomic rename mechanism for Windows executables prior to deletion to bypass Windows file locks immediately.
+  - Replaced legacy cmd scheduling with clean background PowerShell execution for zero-trace binary cleanup.
+  - Enhanced binary path matching to accurately resolve Windows canonical and environment paths.
+
+---
+
 ## [1.0.4] - 2026-08-16
 
-### Removed
-- Removed Kali Linux logo and references across the codebase.
+### Added
+- **Complete Uninstallation & Clean Removal**:
+  - Added `nourfetch uninstall` subcommand and `nourfetch --uninstall` / `-u` flags.
+  - Added `-y` / `--yes` / `-f` / `--force` flags for silent non-interactive uninstallation.
+  - Safe interactive confirmation prompt preventing accidental removal.
+  - Complete wipe of configuration directories (`%APPDATA%\nourfetch`, `~/.config/nourfetch`).
+  - Seamless binary removal across Windows, Linux, and macOS (with detached self-deletion scheduling on Windows).
+  - Standalone one-line uninstaller scripts: `uninstall.ps1`, `uninstall.sh`, and `uninstall.bat`.
 
-### Changed
-- Refined logo registry and documentation.
 
 ---
 
